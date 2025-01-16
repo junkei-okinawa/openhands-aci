@@ -83,7 +83,7 @@ class OHEditor:
                     new_str,
                     'No replacement was performed. `new_str` and `old_str` must be different.',
                 )
-            return self.str_replace(_path, old_str, new_str, enable_linting)
+            return self.str_replace(_path, old_str, new_str, enable_linting, **kwargs)
         elif command == 'insert':
             if insert_line is None:
                 raise EditorToolParameterMissingError(command, 'insert_line')
@@ -151,7 +151,7 @@ class OHEditor:
             )
 
         if not line_all:
-            if line_numbers:
+            if isinstance(line_numbers, list):
                 replace_lines = [i - 1 for i in line_numbers]
                 new_file_content_lines = []
                 for i, line in enumerate(file_content_lines):
@@ -163,7 +163,7 @@ class OHEditor:
                     else:
                         new_file_content_lines.append(line)
                 new_file_content = '\n'.join(new_file_content_lines)
-            elif line_range:
+            elif isinstance(line_range, list):
                 start, end = line_range
                 new_file_content_lines = []
                 for i, line in enumerate(file_content_lines):
@@ -176,35 +176,32 @@ class OHEditor:
                         new_file_content_lines.append(line)
                 new_file_content = '\n'.join(new_file_content_lines)
             else:
-                occurrences = file_content.count(old_str)
-                if occurrences == 0:
-                    raise ToolError(
-                        f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
-                    )
-                if occurrences > 1:
-                    # Find starting line numbers for each occurrence
-                    line_numbers = []
-                    start_idx = 0
-                    while True:
-                        idx = file_content.find(old_str, start_idx)
-                        if idx == -1:
-                            break
-                        # Count newlines before this occurrence to get the line number
-                        line_num = file_content.count('\n', 0, idx) + 1
-                        line_numbers.append(line_num)
-                        start_idx = idx + 1
-                    raise ToolError(
-                        f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
-                    )
                 if regex:
-                    new_file_content = re.sub(re.escape(old_str), new_str, file_content, flags=re.DOTALL)
+                    # One-time substitution
+                    new_file_content = re.sub(old_str, new_str, file_content, 1)
                 else:
+                    occurrences = file_content.count(old_str)
+                    if occurrences == 0:
+                        raise ToolError(
+                            f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
+                        )
+                    if occurrences > 1:
+                        # Find starting line numbers for each occurrence
+                        line_numbers = []
+                        start_idx = 0
+                        while True:
+                            idx = file_content.find(old_str, start_idx)
+                            if idx == -1:
+                                break
+                            # Count newlines before this occurrence to get the line number
+                            line_num = file_content.count('\n', 0, idx) + 1
+                            line_numbers.append(line_num)
+                            start_idx = idx + 1
+                        raise ToolError(
+                            f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
+                        )
                     new_file_content = file_content.replace(old_str, new_str)
-        elif line_all:
-            if regex:
-                new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
-            else:
-                new_file_content = file_content.replace(old_str, new_str)
+        else:
             if regex:
                 new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
             else:
