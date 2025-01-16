@@ -450,6 +450,30 @@ def test_view_symlinked_directory(tmp_path):
     assert 'file2.txt' in result.output
     assert 'subdir' in result.output
     assert 'file3.txt' in result.output
+def test_str_replace_all_with_regex(editor):
+    editor, test_file = editor
+    test_file.write_text("This is a test file.\nThis is a test line.\nThis is another test line.\nThis is a test file.")
+    result = editor(
+        command="str_replace",
+        path=str(test_file),
+        old_str="This is a",
+        new_str="Replaced",
+        regex=True,
+        line_all=True,
+    )
+    assert isinstance(result, CLIResult)
+    assert "Replaced test file." in test_file.read_text()
+    assert "Replaced test line." in test_file.read_text()
+    assert "Replaced another test line." in test_file.read_text()
+    assert (
+        result.output
+        == f"""The file {test_file} has been edited. Here's the result of running `cat -n` on a snippet of {test_file}:
+     1\tReplaced test file.
+     2\tReplaced test line.
+     3\tReplaced another test line.
+     4\tReplaced test file.
+Review the changes and make sure they are as expected. Edit the file again if necessary."""
+    )
 
 def test_str_replace_all_with_regex(editor):
     editor, test_file = editor
@@ -569,30 +593,6 @@ def test_str_replace_with_regex(editor):
         old_str="^This is a",
         new_str="Replaced",
         regex=True,
-    )
-    assert isinstance(result, CLIResult)
-    assert "Replaced test file." in test_file.read_text()
-    assert "Replaced test line." in test_file.read_text()
-    assert "Replaced another test line." in test_file.read_text()
-    assert (
-        result.output
-        == f"""The file {test_file} has been edited. Here's the result of running `cat -n` on a snippet of {test_file}:
-     1\tReplaced test file.
-     2\tReplaced test line.
-     3\tReplaced another test line.
-     4\tReplaced test file.
-Review the changes and make sure they are as expected. Edit the file again if necessary."""
-    )
-def test_str_replace_all_with_regex(editor):
-    editor, test_file = editor
-    test_file.write_text("This is a test file.\nThis is a test line.\nThis is another test line.\nThis is a test file.")
-    result = editor(
-        command="str_replace",
-        path=str(test_file),
-        old_str="This is a",
-        new_str="Replaced",
-        regex=True,
-        line_all=True,
     )
     assert isinstance(result, CLIResult)
     assert "Replaced test file." in test_file.read_text()
