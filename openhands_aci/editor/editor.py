@@ -111,7 +111,70 @@ class OHEditor:
         regex: bool = False,
     ) -> CLIResult:
         """
-        Implement the str_replace command, which replaces old_str with new_str in the file content.
+        Implement the str_replace command, which replaces `old_str` with `new_str` in the file content.
+
+        The behavior of this command is controlled by several optional parameters:
+
+        - `old_str`: (required) The string to be replaced.
+          - It is expanded using expandtabs() before processing.
+          - By default, the replacement is performed on the first exact match of `old_str`.
+          - If `old_str` is not found, a ToolError is raised.
+          - If `old_str` appears multiple times and no line-specific parameters are used, a ToolError is raised.
+
+        - `new_str`: (optional, defaults to "") The string to replace `old_str` with.
+          - It is expanded using expandtabs() before processing.
+          - If not provided, `old_str` will be effectively deleted.
+
+        - `line_numbers`: (optional, list of integers) A list of line numbers where the replacement should occur.
+          - Line numbers are 1-indexed.
+          - If provided, the replacement will only occur on the specified lines.
+          - If a line number is out of range, it will be ignored.
+          - This parameter takes precedence over `line_range` and the default single replacement behavior.
+          - If used with `line_all=True`, `line_all` will be ignored.
+
+        - `line_range`: (optional, list of two integers) A range of line numbers (inclusive) where the replacement should occur.
+          - The first element is the start line, and the second is the end line.
+          - Line numbers are 1-indexed.
+          - If provided, the replacement will only occur on lines within the specified range.
+          - This parameter takes precedence over the default single replacement behavior, but is ignored if `line_numbers` is provided.
+          - If used with `line_all=True`, `line_all` will be ignored.
+
+        - `line_all`: (optional, boolean, defaults to False) If True, all occurrences of `old_str` will be replaced.
+          - If False, only the first occurrence will be replaced, unless `line_numbers` or `line_range` are provided.
+          - If `line_numbers` or `line_range` are provided, this parameter is ignored.
+
+        - `delete_lines`: (optional, list of integers) A list of line numbers to delete.
+          - Line numbers are 1-indexed.
+          - If provided, the specified lines will be deleted, and other replacement parameters will be ignored.
+          - This parameter takes the highest precedence.
+
+        - `delete_range`: (optional, list of two integers) A range of line numbers (inclusive) to delete.
+          - The first element is the start line, and the second is the end line.
+          - Line numbers are 1-indexed.
+          - If provided, the specified lines will be deleted, and other replacement parameters will be ignored, except for `delete_lines`.
+          - This parameter takes precedence over all other parameters except `delete_lines`.
+
+        - `regex`: (optional, boolean, defaults to False) If True, `old_str` will be treated as a regular expression.
+          - If False, `old_str` will be treated as a literal string.
+          - When `regex=True` and `line_all=True`, all matching occurrences will be replaced.
+          - When `regex=True` and `line_all=False`, only the first matching occurrence will be replaced.
+          - When `regex=True` and `line_numbers` or `line_range` are provided, the regex replacement will be applied only on the specified lines.
+
+        **Parameter precedence:**
+        - `delete_lines` has the highest precedence. If provided, other parameters are ignored.
+        - `delete_range` has the second highest precedence. If provided, other parameters except `delete_lines` are ignored.
+        - `line_numbers` has the third highest precedence. If provided, `line_range` and `line_all` are ignored.
+        - `line_range` has the fourth highest precedence. If provided, `line_all` is ignored.
+        - `line_all` is considered only if `line_numbers` and `line_range` are not provided.
+        - If none of `line_numbers`, `line_range`, `line_all`, `delete_lines`, or `delete_range` are provided, the replacement is performed on the first occurrence of `old_str`.
+
+        **Potential issues:**
+        - If `old_str` is not found in the file, a `ToolError` will be raised.
+        - If `old_str` appears multiple times and no line-specific parameters are used, a `ToolError` will be raised to prevent unintended replacements.
+        - When using `regex=True`, ensure that `old_str` is a valid regular expression.
+        - When using `line_numbers` or `line_range`, ensure that the line numbers are within the valid range of the file.
+        - When using `delete_lines` or `delete_range`, ensure that the line numbers are within the valid range of the file.
+
         """
         file_content = self.read_file(path).expandtabs()
         old_str = old_str.expandtabs()
@@ -123,6 +186,7 @@ class OHEditor:
         file_content_lines = file_content.split('\n')
         num_lines = len(file_content_lines)
         
+        # Delete specified lines
         if delete_lines:
             new_file_content_lines = [line for i, line in enumerate(file_content_lines) if i + 1 not in delete_lines]
             new_file_content = '\n'.join(new_file_content_lines)
@@ -136,6 +200,7 @@ class OHEditor:
                 new_content=new_file_content,
             )
         
+        # Delete lines within a specified range
         if delete_range:
             start, end = delete_range
             new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not (start <= i + 1 <= end)]
@@ -150,7 +215,9 @@ class OHEditor:
                 new_content=new_file_content,
             )
 
+        # If line_all is False, perform replacement on specific lines or a single occurrence
         if not line_all:
+            # Replace on specific lines
             if isinstance(line_numbers, list):
                 replace_lines = [i - 1 for i in line_numbers]
                 new_file_content_lines = []
@@ -163,6 +230,7 @@ class OHEditor:
                     else:
                         new_file_content_lines.append(line)
                 new_file_content = '\n'.join(new_file_content_lines)
+            # Replace within a specific line range
             elif isinstance(line_range, list):
                 start, end = line_range
                 new_file_content_lines = []
@@ -175,11 +243,13 @@ class OHEditor:
                     else:
                         new_file_content_lines.append(line)
                 new_file_content = '\n'.join(new_file_content_lines)
+            # Replace a single occurrence
             else:
                 if regex:
-                    # One-time substitution
+                    # One-time substitution using regex
                     new_file_content = re.sub(old_str, new_str, file_content, 1)
                 else:
+                    # Ensure old_str exists and is unique for non-regex single replacement
                     occurrences = file_content.count(old_str)
                     if occurrences == 0:
                         raise ToolError(
@@ -201,19 +271,22 @@ class OHEditor:
                             f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
                         )
                     new_file_content = file_content.replace(old_str, new_str)
+        # If line_all is True, replace all occurrences
         else:
             if regex:
+                # Replace all occurrences using regex
                 new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
             else:
+                # Replace all occurrences using string replace
                 new_file_content = file_content.replace(old_str, new_str)
 
         # Write the new content to the file
         self.write_file(path, new_file_content)
 
-        # Save the content to history
+        # Save the content to history for undo functionality
         self._file_history[path].append(file_content)
 
-        # Create a snippet of the edited section
+        # Create a snippet of the edited section for user feedback
         replacement_line = file_content.split(old_str)[0].count('\n')
         start_line = max(0, replacement_line - SNIPPET_CONTEXT_WINDOW)
         end_line = replacement_line + SNIPPET_CONTEXT_WINDOW + new_str.count('\n')
