@@ -1,3 +1,4 @@
+import re
 import tempfile
 from collections import defaultdict
 from pathlib import Path
@@ -127,8 +128,8 @@ class OHEditor:
                 f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
             )
 
-        # Replace old_str with new_str
-        new_file_content = file_content.replace(old_str, new_str)
+        # Replace old_str with new_str using re.sub
+        new_file_content = re.sub(re.escape(old_str), new_str, file_content, flags=re.DOTALL)
 
         # Write the new content to the file
         self.write_file(path, new_file_content)
