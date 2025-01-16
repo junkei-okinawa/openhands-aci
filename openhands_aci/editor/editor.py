@@ -1,6 +1,6 @@
+import re
 import tempfile
 from collections import defaultdict
-import re
 from pathlib import Path
 from typing import Literal, get_args
 
