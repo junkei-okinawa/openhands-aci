@@ -15,6 +15,7 @@ from .exceptions import (
 )
 from .prompts import DIRECTORY_CONTENT_TRUNCATED_NOTICE, FILE_CONTENT_TRUNCATED_NOTICE
 from .results import CLIResult, maybe_truncate
+from ..linter.base import LintResult
 
 Command = Literal[
     'view',
@@ -97,7 +98,17 @@ class OHEditor:
         )
 
     def str_replace(
-        self, path: Path, old_str: str, new_str: str | None, enable_linting: bool
+        self,
+        path: Path,
+        old_str: str,
+        new_str: str | None,
+        enable_linting: bool,
+        line_numbers: list[int] | None = None,
+        line_range: list[int] | None = None,
+        line_all: bool = False,
+        delete_lines: list[int] | None = None,
+        delete_range: list[int] | None = None,
+        regex: bool = False,
     ) -> CLIResult:
         """
         Implement the str_replace command, which replaces old_str with new_str in the file content.
@@ -106,30 +117,98 @@ class OHEditor:
         old_str = old_str.expandtabs()
         new_str = new_str.expandtabs() if new_str is not None else ''
 
-        # Check if old_str is unique in the file
-        occurrences = file_content.count(old_str)
-        if occurrences == 0:
-            raise ToolError(
-                f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
+        if new_str is None:
+            new_str = ""
+
+        file_content_lines = file_content.split('\n')
+        num_lines = len(file_content_lines)
+        
+        if delete_lines:
+            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if i + 1 not in delete_lines]
+            new_file_content = '\n'.join(new_file_content_lines)
+            self.write_file(path, new_file_content)
+            self._file_history[path].append(file_content)
+            return CLIResult(
+                output=f'The file {path} has been edited. Specified lines have been deleted.',
+                prev_exist=True,
+                path=str(path),
+                old_content=file_content,
+                new_content=new_file_content,
             )
-        if occurrences > 1:
-            # Find starting line numbers for each occurrence
-            line_numbers = []
-            start_idx = 0
-            while True:
-                idx = file_content.find(old_str, start_idx)
-                if idx == -1:
-                    break
-                # Count newlines before this occurrence to get the line number
-                line_num = file_content.count('\n', 0, idx) + 1
-                line_numbers.append(line_num)
-                start_idx = idx + 1
-            raise ToolError(
-                f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
+        
+        if delete_range:
+            start, end = delete_range
+            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not (start <= i + 1 <= end)]
+            new_file_content = '\n'.join(new_file_content_lines)
+            self.write_file(path, new_file_content)
+            self._file_history[path].append(file_content)
+            return CLIResult(
+                output=f'The file {path} has been edited. Specified lines have been deleted.',
+                prev_exist=True,
+                path=str(path),
+                old_content=file_content,
+                new_content=new_file_content,
             )
 
-        # Replace old_str with new_str using re.sub
-        new_file_content = re.sub(re.escape(old_str), new_str, file_content, flags=re.DOTALL)
+        if not line_all:
+            if line_numbers:
+                replace_lines = [i - 1 for i in line_numbers]
+                new_file_content_lines = []
+                for i, line in enumerate(file_content_lines):
+                    if i in replace_lines:
+                        if regex:
+                            new_file_content_lines.append(re.sub(old_str, new_str, line, flags=re.DOTALL))
+                        else:
+                            new_file_content_lines.append(line.replace(old_str, new_str))
+                    else:
+                        new_file_content_lines.append(line)
+                new_file_content = '\n'.join(new_file_content_lines)
+            elif line_range:
+                start, end = line_range
+                new_file_content_lines = []
+                for i, line in enumerate(file_content_lines):
+                    if start - 1 <= i < end:
+                        if regex:
+                            new_file_content_lines.append(re.sub(old_str, new_str, line, flags=re.DOTALL))
+                        else:
+                            new_file_content_lines.append(line.replace(old_str, new_str))
+                    else:
+                        new_file_content_lines.append(line)
+                new_file_content = '\n'.join(new_file_content_lines)
+            else:
+                occurrences = file_content.count(old_str)
+                if occurrences == 0:
+                    raise ToolError(
+                        f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
+                    )
+                if occurrences > 1:
+                    # Find starting line numbers for each occurrence
+                    line_numbers = []
+                    start_idx = 0
+                    while True:
+                        idx = file_content.find(old_str, start_idx)
+                        if idx == -1:
+                            break
+                        # Count newlines before this occurrence to get the line number
+                        line_num = file_content.count('\n', 0, idx) + 1
+                        line_numbers.append(line_num)
+                        start_idx = idx + 1
+                    raise ToolError(
+                        f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
+                    )
+                if regex:
+                    new_file_content = re.sub(re.escape(old_str), new_str, file_content, flags=re.DOTALL)
+                else:
+                    new_file_content = file_content.replace(old_str, new_str)
+        elif line_all:
+            if regex:
+                new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
+            else:
+                new_file_content = file_content.replace(old_str, new_str)
+            if regex:
+                new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
+            else:
+                new_file_content = file_content.replace(old_str, new_str)
 
         # Write the new content to the file
         self.write_file(path, new_file_content)
