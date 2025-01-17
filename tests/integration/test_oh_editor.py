@@ -371,6 +371,120 @@ def test_str_replace_new_str_and_old_str_same(editor):
         in str(exc_info.value.message)
     )
 
+def test_str_replace_invalid_line_numbers(editor):
+    editor, test_file = editor
+    test_file.write_text("Line 1\nLine 2\nLine 3")
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            line_numbers=[0, 2],
+        )
+    assert "Invalid line number: 0" in str(exc_info.value.message)
+
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            line_numbers=[2, 4],
+        )
+    assert "Invalid line number: 4" in str(exc_info.value.message)
+
+
+def test_str_replace_invalid_line_range(editor):
+    editor, test_file = editor
+    test_file.write_text("Line 1\nLine 2\nLine 3")
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            line_range=[0, 2],
+        )
+    assert "Invalid line range: 0" in str(exc_info.value.message)
+
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            line_range=[2, 4],
+        )
+    assert "Invalid line range: 4" in str(exc_info.value.message)
+
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            line_range=[3, 1],
+        )
+    assert "Invalid line range: [3, 1]. Start line must be less than or equal to end line." in str(exc_info.value.message)
+
+
+def test_str_replace_invalid_delete_lines(editor):
+    editor, test_file = editor
+    test_file.write_text("Line 1\nLine 2\nLine 3")
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            delete_lines=[0, 2],
+        )
+    assert "Invalid delete lines: 0" in str(exc_info.value.message)
+
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            delete_lines=[2, 4],
+        )
+    assert "Invalid delete lines: 4" in str(exc_info.value.message)
+
+
+def test_str_replace_invalid_delete_range(editor):
+    editor, test_file = editor
+    test_file.write_text("Line 1\nLine 2\nLine 3")
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            delete_range=[0, 2],
+        )
+    assert "Invalid delete range: 0" in str(exc_info.value.message)
+
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            delete_range=[2, 4],
+        )
+    assert "Invalid delete range: 4" in str(exc_info.value.message)
+
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='Line 2',
+            new_str='New Line',
+            delete_range=[3, 1],
+        )
+    assert "Invalid delete range: [3, 1]. Start line must be less than or equal to end line." in str(exc_info.value.message)
 
 def test_insert_missing_line_param(editor):
     editor, test_file = editor
@@ -564,7 +678,7 @@ def test_str_replace_with_delete_range(editor):
     assert "This is another test line." not in test_file.read_text()
     assert (
         result.output
-        == f"""The file {path} has been edited. Specified lines have been deleted."""
+        == f"""The file {path} has been edited. The specified line range was deleted."""
     )
 
 
