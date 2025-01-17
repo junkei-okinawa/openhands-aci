@@ -186,24 +186,32 @@ class OHEditor:
         file_content_lines = file_content.split('\n')
         num_lines = len(file_content_lines)
         
-        # Delete specified lines
-        if delete_lines:
-            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if i + 1 not in delete_lines]
-            new_file_content = '\n'.join(new_file_content_lines)
-            self.write_file(path, new_file_content)
-            self._file_history[path].append(file_content)
-            return CLIResult(
-                output=f'The file {path} has been edited. Specified lines have been deleted.',
-                prev_exist=True,
-                path=str(path),
-                old_content=file_content,
-                new_content=new_file_content,
-            )
+        def validate_min_or_max(pattern: str, min_line: int, max_line: int, num_lines: int):
+            if min_line <= 0:
+                raise ToolError(f"Invalid {pattern}: {min_line}. Line numbers must be between 1 and {num_lines}.")
+            if num_lines < max_line:
+                raise ToolError(f"Invalid {pattern}: {max_line}. Line numbers must be between 1 and {num_lines}.")
         
-        # Delete lines within a specified range
+        # Validate line numbers
+        if line_numbers:
+            validate_min_or_max("line number", min(line_numbers), max(line_numbers), num_lines)
+        if line_range:
+            validate_min_or_max("line range", min(line_range), max(line_range), num_lines)
+            start , end = line_range
+            if start > end:
+                raise ToolError(f"Invalid line range: {line_range}. Start line must be less than or equal to end line.")
+        if delete_lines:
+            validate_min_or_max("delete lines", min(delete_lines), max(delete_lines), num_lines)
         if delete_range:
-            start, end = delete_range
-            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not (start <= i + 1 <= end)]
+            validate_min_or_max("delete range", min(delete_range), max(delete_range), num_lines)
+            start , end = delete_range
+            if start > end:
+                raise ToolError(f"Invalid delete range: {delete_range}. Start line must be less than or equal to end line.")
+
+        # Delete specified line
+        if delete_lines:
+            delete_lines = [i - 1 for i in delete_lines]
+            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not i in delete_lines]
             new_file_content = '\n'.join(new_file_content_lines)
             self.write_file(path, new_file_content)
             self._file_history[path].append(file_content)
@@ -215,10 +223,25 @@ class OHEditor:
                 new_content=new_file_content,
             )
 
+        # Delete lines within a specified range
+        if delete_range:
+            start, end = delete_range
+            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not (start <= i + 1 <= end)]
+            new_file_content = '\n'.join(new_file_content_lines)
+            self.write_file(path, new_file_content)
+            self._file_history[path].append(file_content)
+            return CLIResult(
+                output=f'The file {path} has been edited. The specified line range was deleted.',
+                prev_exist=True,
+                path=str(path),
+                old_content=file_content,
+                new_content=new_file_content,
+            )
+
         # If line_all is False, perform replacement on specific lines or a single occurrence
         if not line_all:
             # Replace on specific lines
-            if isinstance(line_numbers, list):
+            if line_numbers:
                 replace_lines = [i - 1 for i in line_numbers]
                 new_file_content_lines = []
                 for i, line in enumerate(file_content_lines):
@@ -231,7 +254,7 @@ class OHEditor:
                         new_file_content_lines.append(line)
                 new_file_content = '\n'.join(new_file_content_lines)
             # Replace within a specific line range
-            elif isinstance(line_range, list):
+            elif line_range:
                 start, end = line_range
                 new_file_content_lines = []
                 for i, line in enumerate(file_content_lines):
