@@ -243,29 +243,23 @@ class OHEditor:
             # Replace on specific lines
             if line_numbers:
                 replace_lines = [i - 1 for i in line_numbers]
-                new_file_content_lines = []
-                for i, line in enumerate(file_content_lines):
-                    if i in replace_lines:
+                for i in replace_lines:
+                    if i < len(file_content_lines):
                         if regex:
-                            new_file_content_lines.append(re.sub(old_str, new_str, line, flags=re.DOTALL))
+                            file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
                         else:
-                            new_file_content_lines.append(line.replace(old_str, new_str))
-                    else:
-                        new_file_content_lines.append(line)
-                new_file_content = '\n'.join(new_file_content_lines)
+                            file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
+                new_file_content = '\n'.join(file_content_lines)
             # Replace within a specific line range
             elif line_range:
                 start, end = line_range
-                new_file_content_lines = []
-                for i, line in enumerate(file_content_lines):
-                    if start - 1 <= i < end:
+                for i in range(start - 1, end):
+                    if i < len(file_content_lines):
                         if regex:
-                            new_file_content_lines.append(re.sub(old_str, new_str, line, flags=re.DOTALL))
+                            file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
                         else:
-                            new_file_content_lines.append(line.replace(old_str, new_str))
-                    else:
-                        new_file_content_lines.append(line)
-                new_file_content = '\n'.join(new_file_content_lines)
+                            file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
+                new_file_content = '\n'.join(file_content_lines)
             # Replace a single occurrence
             else:
                 if regex:
