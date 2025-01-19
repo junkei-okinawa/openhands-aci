@@ -72,7 +72,7 @@ class OHEditor:
                 path=str(_path),
                 new_content=file_text,
                 prev_exist=False,
-                output=f"File created successfully at: {_path}",
+                output=f'File created successfully at: {_path}',
             )
         elif command == 'str_replace':
             if old_str is None:
@@ -216,7 +216,7 @@ class OHEditor:
             self.write_file(path, new_file_content)
             self._file_history[path].append(file_content)
             return CLIResult(
-                output=f"The file {path} has been edited. Specified lines have been deleted.",
+                output=f'The file {path} has been edited. Specified lines have been deleted.',
                 prev_exist=True,
                 path=str(path),
                 old_content=file_content,
@@ -231,7 +231,7 @@ class OHEditor:
             self.write_file(path, new_file_content)
             self._file_history[path].append(file_content)
             return CLIResult(
-                output=f"The file {path} has been edited. The specified line range was deleted.",
+                output=f'The file {path} has been edited. The specified line range was deleted.',
                 prev_exist=True,
                 path=str(path),
                 old_content=file_content,
@@ -270,7 +270,7 @@ class OHEditor:
                     occurrences = file_content.count(old_str)
                     if occurrences == 0:
                         raise ToolError(
-                            f"No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}."
+                            f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
                         )
                     if occurrences > 1:
                         # Find starting line numbers for each occurrence
@@ -285,7 +285,7 @@ class OHEditor:
                             line_numbers.append(line_num)
                             start_idx = idx + 1
                         raise ToolError(
-                            f"No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique."
+                            f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
                         )
                     new_file_content = file_content.replace(old_str, new_str)
         # If line_all is True, replace all occurrences
@@ -314,7 +314,7 @@ class OHEditor:
         # Prepare the success message
         success_message = f'The file {path} has been edited. '
         success_message += self._make_output(
-            snippet, f"a snippet of {path}", start_line + 1
+            snippet, f'a snippet of {path}', start_line + 1
         )
 
         if enable_linting:
