@@ -29,7 +29,7 @@ Command = Literal[
 
 
 class OHEditor:
-    """
+    '''
     An filesystem editor tool that allows the agent to
     - view
     - create
@@ -38,7 +38,7 @@ class OHEditor:
     The tool parameters are defined by Anthropic and are not editable.
 
     Original implementation: https://github.com/anthropics/anthropic-quickstarts/blob/main/computer-use-demo/computer_use_demo/tools/edit.py
-    """
+    '''
 
     TOOL_NAME = 'oh_editor'
 
@@ -72,7 +72,7 @@ class OHEditor:
                 path=str(_path),
                 new_content=file_text,
                 prev_exist=False,
-                output=f'File created successfully at: {_path}',
+                output=f"File created successfully at: {_path}",
             )
         elif command == 'str_replace':
             if old_str is None:
@@ -94,7 +94,7 @@ class OHEditor:
             return self.undo_edit(_path)
 
         raise ToolError(
-            f'Unrecognized command {command}. The allowed commands for the {self.TOOL_NAME} tool are: {", ".join(get_args(Command))}'
+            f'Unrecognized command {command}. The allowed commands for the {self.TOOL_NAME} tool are: {', '.join(get_args(Command))}'
         )
 
     def str_replace(
@@ -110,7 +110,7 @@ class OHEditor:
         delete_range: list[int] | None = None,
         regex: bool = False,
     ) -> CLIResult:
-        """
+        '''
         Implement the str_replace command, which replaces `old_str` with `new_str` in the file content.
 
         The behavior of this command is controlled by several optional parameters:
@@ -121,7 +121,7 @@ class OHEditor:
           - If `old_str` is not found, a ToolError is raised.
           - If `old_str` appears multiple times and no line-specific parameters are used, a ToolError is raised.
 
-        - `new_str`: (optional, defaults to "") The string to replace `old_str` with.
+        - `new_str`: (optional, defaults to '') The string to replace `old_str` with.
           - It is expanded using expandtabs() before processing.
           - If not provided, `old_str` will be effectively deleted.
 
@@ -175,38 +175,38 @@ class OHEditor:
         - When using `line_numbers` or `line_range`, ensure that the line numbers are within the valid range of the file.
         - When using `delete_lines` or `delete_range`, ensure that the line numbers are within the valid range of the file.
 
-        """
+        '''
         file_content = self.read_file(path).expandtabs()
         old_str = old_str.expandtabs()
         new_str = new_str.expandtabs() if new_str is not None else ''
 
         if new_str is None:
-            new_str = ""
+            new_str = ''
 
         file_content_lines = file_content.split('\n')
         num_lines = len(file_content_lines)
         
         def validate_min_or_max(pattern: str, min_line: int, max_line: int, num_lines: int):
             if min_line <= 0:
-                raise ToolError(f"Invalid {pattern}: {min_line}. Line numbers must be between 1 and {num_lines}.")
+                raise ToolError(f'Invalid {pattern}: {min_line}. Line numbers must be between 1 and {num_lines}.')
             if num_lines < max_line:
-                raise ToolError(f"Invalid {pattern}: {max_line}. Line numbers must be between 1 and {num_lines}.")
+                raise ToolError(f'Invalid {pattern}: {max_line}. Line numbers must be between 1 and {num_lines}.')
         
         # Validate line numbers
         if line_numbers:
-            validate_min_or_max("line number", min(line_numbers), max(line_numbers), num_lines)
+            validate_min_or_max('line number', min(line_numbers), max(line_numbers), num_lines)
         if line_range:
-            validate_min_or_max("line range", min(line_range), max(line_range), num_lines)
+            validate_min_or_max('line range', min(line_range), max(line_range), num_lines)
             start , end = line_range
             if start > end:
-                raise ToolError(f"Invalid line range: {line_range}. Start line must be less than or equal to end line.")
+                raise ToolError(f'Invalid line range: {line_range}. Start line must be less than or equal to end line.')
         if delete_lines:
-            validate_min_or_max("delete lines", min(delete_lines), max(delete_lines), num_lines)
+            validate_min_or_max('delete lines', min(delete_lines), max(delete_lines), num_lines)
         if delete_range:
-            validate_min_or_max("delete range", min(delete_range), max(delete_range), num_lines)
+            validate_min_or_max('delete range', min(delete_range), max(delete_range), num_lines)
             start , end = delete_range
             if start > end:
-                raise ToolError(f"Invalid delete range: {delete_range}. Start line must be less than or equal to end line.")
+                raise ToolError(f'Invalid delete range: {delete_range}. Start line must be less than or equal to end line.')
 
         # Delete specified line
         if delete_lines:
@@ -216,7 +216,7 @@ class OHEditor:
             self.write_file(path, new_file_content)
             self._file_history[path].append(file_content)
             return CLIResult(
-                output=f'The file {path} has been edited. Specified lines have been deleted.',
+                output=f"The file {path} has been edited. Specified lines have been deleted.",
                 prev_exist=True,
                 path=str(path),
                 old_content=file_content,
@@ -231,7 +231,7 @@ class OHEditor:
             self.write_file(path, new_file_content)
             self._file_history[path].append(file_content)
             return CLIResult(
-                output=f'The file {path} has been edited. The specified line range was deleted.',
+                output=f"The file {path} has been edited. The specified line range was deleted.",
                 prev_exist=True,
                 path=str(path),
                 old_content=file_content,
@@ -259,7 +259,7 @@ class OHEditor:
                             file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
                         else:
                             file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
-                new_file_content = "\\n".join(file_content_lines)
+                new_file_content = '\n'.join(file_content_lines)
             # Replace a single occurrence
             else:
                 if regex:
@@ -270,7 +270,7 @@ class OHEditor:
                     occurrences = file_content.count(old_str)
                     if occurrences == 0:
                         raise ToolError(
-                            f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
+                            f"No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}."
                         )
                     if occurrences > 1:
                         # Find starting line numbers for each occurrence
@@ -285,7 +285,7 @@ class OHEditor:
                             line_numbers.append(line_num)
                             start_idx = idx + 1
                         raise ToolError(
-                            f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
+                            f"No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique."
                         )
                     new_file_content = file_content.replace(old_str, new_str)
         # If line_all is True, replace all occurrences
@@ -297,7 +297,7 @@ class OHEditor:
                 # Replace all occurrences using string replace
                 file_content_lines = file_content.splitlines()
                 new_file_content_lines = [line.replace(old_str, new_str) for line in file_content_lines]
-                new_file_content = "\\n".join(new_file_content_lines)
+                new_file_content = '\n'.join(new_file_content_lines)
 
         # Write the new content to the file
         self.write_file(path, new_file_content)
@@ -314,7 +314,7 @@ class OHEditor:
         # Prepare the success message
         success_message = f'The file {path} has been edited. '
         success_message += self._make_output(
-            snippet, f'a snippet of {path}', start_line + 1
+            snippet, f"a snippet of {path}", start_line + 1
         )
 
         if enable_linting:
@@ -332,9 +332,9 @@ class OHEditor:
         )
 
     def view(self, path: Path, view_range: list[int] | None = None) -> CLIResult:
-        """
+        '''
         View the contents of a file or a directory.
-        """
+        '''
         if path.is_dir():
             if view_range:
                 raise EditorToolParameterInvalidError(
@@ -346,7 +346,7 @@ class OHEditor:
             # First count hidden files/dirs in current directory only
             # -mindepth 1 excludes . and .. automatically
             _, hidden_stdout, _ = run_shell_cmd(
-                rf"find -L {path} -mindepth 1 -maxdepth 1 -name '.*'"
+                rf'find -L {path} -mindepth 1 -maxdepth 1 -name '.*''
             )
             hidden_count = (
                 len(hidden_stdout.strip().split('\n')) if hidden_stdout.strip() else 0
@@ -354,16 +354,16 @@ class OHEditor:
 
             # Then get files/dirs up to 2 levels deep, excluding hidden entries at both depth 1 and 2
             _, stdout, stderr = run_shell_cmd(
-                rf"find -L {path} -maxdepth 2 -not \( -path '{path}/\.*' -o -path '{path}/*/\.*' \) | sort",
+                rf'find -L {path} -maxdepth 2 -not \( -path '{path}/\.*' -o -path '{path}/*/\.*' \) | sort',
                 truncate_notice=DIRECTORY_CONTENT_TRUNCATED_NOTICE,
             )
             if not stderr:
                 msg = [
-                    f"Here's the files and directories up to 2 levels deep in {path}, excluding hidden items:\n{stdout}"
+                    f'Here's the files and directories up to 2 levels deep in {path}, excluding hidden items:\n{stdout}'
                 ]
                 if hidden_count > 0:
                     msg.append(
-                        f"\n{hidden_count} hidden files/directories in this directory are excluded. You can use 'ls -la {path}' to see them."
+                        f'\n{hidden_count} hidden files/directories in this directory are excluded. You can use 'ls -la {path}' to see them.'
                     )
                 stdout = '\n'.join(msg)
             return CLIResult(
@@ -424,9 +424,9 @@ class OHEditor:
         )
 
     def write_file(self, path: Path, file_text: str) -> None:
-        """
+        '''
         Write the content of a file to a given path; raise a ToolError if an error occurs.
-        """
+        '''
         try:
             path.write_text(file_text)
         except Exception as e:
@@ -435,9 +435,9 @@ class OHEditor:
     def insert(
         self, path: Path, insert_line: int, new_str: str, enable_linting: bool
     ) -> CLIResult:
-        """
+        '''
         Implement the insert command, which inserts new_str at the specified line in the file content.
-        """
+        '''
         try:
             file_text = self.read_file(path)
         except Exception as e:
@@ -497,9 +497,9 @@ class OHEditor:
         )
 
     def validate_path(self, command: Command, path: Path) -> None:
-        """
+        '''
         Check that the path/command combination is valid.
-        """
+        '''
         # Check if its an absolute path
         if not path.is_absolute():
             suggested_path = Path.cwd() / path
@@ -529,9 +529,9 @@ class OHEditor:
             )
 
     def undo_edit(self, path: Path) -> CLIResult:
-        """
+        '''
         Implement the undo_edit command.
-        """
+        '''
         if not self._file_history[path]:
             raise ToolError(f'No edit history found for {path}.')
 
@@ -548,9 +548,9 @@ class OHEditor:
         )
 
     def read_file(self, path: Path) -> str:
-        """
+        '''
         Read the content of a file from a given path; raise a ToolError if an error occurs.
-        """
+        '''
         try:
             return path.read_text()
         except Exception as e:
@@ -563,9 +563,9 @@ class OHEditor:
         start_line: int = 1,
         expand_tabs: bool = True,
     ) -> str:
-        """
+        '''
         Generate output for the CLI based on the content of a code snippet.
-        """
+        '''
         snippet_content = maybe_truncate(
             snippet_content, truncate_notice=FILE_CONTENT_TRUNCATED_NOTICE
         )
@@ -579,15 +579,15 @@ class OHEditor:
             ]
         )
         return (
-            f"Here's the result of running `cat -n` on {snippet_description}:\n"
+            f'Here's the result of running `cat -n` on {snippet_description}:\n'
             + snippet_content
             + '\n'
         )
 
     def _run_linting(self, old_content: str, new_content: str, path: Path) -> str:
-        """
+        '''
         Run linting on file changes and return formatted results.
-        """
+        '''
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create paths with exact filenames in temp directory
