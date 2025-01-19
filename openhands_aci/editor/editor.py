@@ -346,7 +346,7 @@ class OHEditor:
             # First count hidden files/dirs in current directory only
             # -mindepth 1 excludes . and .. automatically
             _, hidden_stdout, _ = run_shell_cmd(
-                rf'find -L {path} -mindepth 1 -maxdepth 1 -name '.*''
+                rf"""find -L {path} -mindepth 1 -maxdepth 1 -name '.*'"""
             )
             hidden_count = (
                 len(hidden_stdout.strip().split('\n')) if hidden_stdout.strip() else 0
@@ -354,16 +354,16 @@ class OHEditor:
 
             # Then get files/dirs up to 2 levels deep, excluding hidden entries at both depth 1 and 2
             _, stdout, stderr = run_shell_cmd(
-                rf'find -L {path} -maxdepth 2 -not \( -path '{path}/\.*' -o -path '{path}/*/\.*' \) | sort',
+                rf"""find -L {path} -maxdepth 2 -not \( -path '{path}/\.*' -o -path '{path}/*/\.*' \) | sort""",
                 truncate_notice=DIRECTORY_CONTENT_TRUNCATED_NOTICE,
             )
             if not stderr:
                 msg = [
-                    f'Here's the files and directories up to 2 levels deep in {path}, excluding hidden items:\n{stdout}'
+                    f"""Here's the files and directories up to 2 levels deep in {path}, excluding hidden items:\n{stdout}"""
                 ]
                 if hidden_count > 0:
                     msg.append(
-                        f'\n{hidden_count} hidden files/directories in this directory are excluded. You can use 'ls -la {path}' to see them.'
+                        f'\n{hidden_count} hidden files/directories in this directory are excluded. You can use "ls -la {path}" to see them.'
                     )
                 stdout = '\n'.join(msg)
             return CLIResult(
@@ -579,7 +579,7 @@ class OHEditor:
             ]
         )
         return (
-            f'Here's the result of running `cat -n` on {snippet_description}:\n'
+            f"""Here's the result of running `cat -n` on {snippet_description}:\n"""
             + snippet_content
             + '\n'
         )
