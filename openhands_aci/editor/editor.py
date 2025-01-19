@@ -261,12 +261,24 @@ class OHEditor:
             # Replace a single occurrence
             else:
                 if regex:
-                    # One-time substitution using regex
-                    new_file_content = re.sub(old_str, new_str, file_content, 1, flags=re.DOTALL)
-                    if new_file_content == file_content and new_str != '':
-                            raise ToolError(
-                                f'No replacement was performed, old_str `{old_str}` did not appear in {path}.'
-                            )
+                    file_content_lines = file_content.splitlines()
+                    new_file_content_lines = []
+                    replaced = False
+                    for line in file_content_lines:
+                        if not replaced:
+                            new_line = re.sub(old_str, new_str, line, 1, flags=re.DOTALL)
+                            if new_line != line:
+                                new_file_content_lines.append(new_line)
+                                replaced = True
+                            else:
+                                new_file_content_lines.append(line)
+                        else:
+                            new_file_content_lines.append(line)
+                    new_file_content = '\n'.join(new_file_content_lines)
+                    if not replaced and new_str != '':
+                        raise ToolError(
+                            f'No replacement was performed, old_str `{old_str}` did not appear in {path}.'
+                        )
                 else:
                     # Ensure old_str exists and is unique for non-regex single replacement
                     occurrences = file_content.count(old_str)
@@ -294,7 +306,9 @@ class OHEditor:
         else:
             if regex:
                 # Replace all occurrences using regex
-                 new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
+                file_content_lines = file_content.splitlines()
+                new_file_content_lines = [re.sub(old_str, new_str, line, flags=re.DOTALL) for line in file_content_lines]
+                new_file_content = '\n'.join(new_file_content_lines)
             else:
                 # Replace all occurrences using string replace
                 file_content_lines = file_content.splitlines()
