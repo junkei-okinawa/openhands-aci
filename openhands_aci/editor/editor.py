@@ -23,26 +23,37 @@ Command = Literal[
     'str_replace',
     'insert',
     'undo_edit',
+    'delete',
     # 'jump_to_definition', TODO:
     # 'find_references' TODO:
 ]
 
 
 class OHEditor:
-    '''
-    An filesystem editor tool that allows the agent to
-    - view
-    - create
-    - navigate
-    - edit files
-    The tool parameters are defined by Anthropic and are not editable.
+    """
+    A tool that abstracts filesystem editing operations.
+
+    This tool allows an agent to perform the following operations:
+      - View a file (view)
+      - Create a file (create)
+      - Replace a string within a file (str_replace)
+      - Insert text into a file (insert)
+      - Undo an edit operation (undo_edit)
+      - Delete lines from a file (delete)
+
+    Tool parameters are defined by Anthropic and are not editable.
 
     Original implementation: https://github.com/anthropics/anthropic-quickstarts/blob/main/computer-use-demo/computer_use_demo/tools/edit.py
-    '''
+    """
 
     TOOL_NAME = 'oh_editor'
 
     def __init__(self):
+        """
+        Constructor for OHEditor.
+
+        Initializes the file edit history and linter.
+        """
         self._file_history: dict[Path, list[str]] = defaultdict(list)
         self._linter = DefaultLinter()
 
@@ -57,8 +68,35 @@ class OHEditor:
         new_str: str | None = None,
         insert_line: int | None = None,
         enable_linting: bool = False,
+        delete_lines: list[int] | None = None,
+        start: int | None = None,
+        end: int | None = None,
         **kwargs,
     ) -> CLIResult:
+        """
+        Executes the specified command.
+
+        Args:
+            command (Command): The command to execute.
+            path (str): The path to the file being operated on.
+            file_text (str, optional): The text to use when creating a file. Defaults to None.
+            view_range (list[int], optional): The range of lines to display when viewing a file ([start_line, end_line]). Defaults to None.
+            old_str (str, optional): The string to replace during string replacement. Defaults to None.
+            new_str (str, optional): The string to replace with during string replacement. Defaults to None.
+            insert_line (int, optional): The line number to insert text at. Defaults to None.
+            enable_linting (bool, optional): Whether to enable the linter. Defaults to False.
+            delete_lines (list[int], optional): The list of line numbers to delete. Defaults to None.
+            start (int, optional): The start line of the range to delete. Defaults to None.
+            end (int, optional): The end line of the range to delete. Defaults to None.
+
+        Returns:
+            CLIResult: The result of the command execution.
+
+        Raises:
+            EditorToolParameterMissingError: If a required parameter is missing.
+            EditorToolParameterInvalidError: If a parameter value is invalid.
+            ToolError: If any other error occurs.
+        """
         _path = Path(path)
         self.validate_path(command, _path)
         if command == 'view':
@@ -83,7 +121,7 @@ class OHEditor:
                     new_str,
                     'No replacement was performed. `new_str` and `old_str` must be different.',
                 )
-            return self.str_replace(_path, old_str, new_str, enable_linting, **kwargs)
+            return self.str_replace(_path, old_str, new_str, enable_linting, start=start, end=end, **kwargs)
         elif command == 'insert':
             if insert_line is None:
                 raise EditorToolParameterMissingError(command, 'insert_line')
@@ -92,6 +130,8 @@ class OHEditor:
             return self.insert(_path, insert_line, new_str, enable_linting)
         elif command == 'undo_edit':
             return self.undo_edit(_path)
+        elif command == 'delete':
+            return self.delete(_path, delete_lines=delete_lines, start=start, end=end)
 
         raise ToolError(
             f'Unrecognized command {command}. The allowed commands for the {self.TOOL_NAME} tool are: {', '.join(get_args(Command))}'
@@ -104,88 +144,77 @@ class OHEditor:
         new_str: str | None,
         enable_linting: bool,
         line_numbers: list[int] | None = None,
-        line_range: list[int] | None = None,
+        start: int | None = None,
+        end: int | None = None,
         line_all: bool = False,
-        delete_lines: list[int] | None = None,
-        delete_range: list[int] | None = None,
         regex: bool = False,
     ) -> CLIResult:
-        '''
-        Implement the str_replace command, which replaces `old_str` with `new_str` in the file content.
+        """
+        Replaces a string within a file.
 
         The behavior of this command is controlled by several optional parameters:
 
         - `old_str`: (required) The string to be replaced.
-          - It is expanded using expandtabs() before processing.
-          - By default, the replacement is performed on the first exact match of `old_str`.
-          - If `old_str` is not found, a ToolError is raised.
-          - If `old_str` appears multiple times and no line-specific parameters are used, a ToolError is raised.
+            - It is expanded using expandtabs() before processing.
+            - By default, the replacement is performed on the first exact match of `old_str`.
+            - If `old_str` is not found, a ToolError is raised.
+            - If `old_str` appears multiple times and no line-specific parameters are used, a ToolError is raised, unless `line_all` is True.
+            - `old_str` should not contain line numbers.
 
         - `new_str`: (optional, defaults to '') The string to replace `old_str` with.
-          - It is expanded using expandtabs() before processing.
-          - If not provided, `old_str` will be effectively deleted.
+            - It is expanded using expandtabs() before processing.
+            - If not provided, `old_str` will be effectively deleted.
 
         - `line_numbers`: (optional, list of integers) A list of line numbers where the replacement should occur.
-          - Line numbers are 1-indexed.
-          - If provided, the replacement will only occur on the specified lines.
-          - If a line number is out of range, it will be ignored.
-          - This parameter takes precedence over `line_range` and the default single replacement behavior.
-          - If used with `line_all=True`, `line_all` will be ignored.
+            - Line numbers are 1-indexed.
+            - If provided, the replacement will only occur on the specified lines.
+            - If a line number is out of range, it will be ignored.
+            - This parameter takes precedence over `line_range` and the default single replacement behavior.
+            - If used with `line_all=True`, `line_all` will be ignored.
 
         - `line_range`: (optional, list of two integers) A range of line numbers (inclusive) where the replacement should occur.
-          - The first element is the start line, and the second is the end line.
-          - Line numbers are 1-indexed.
-          - If provided, the replacement will only occur on lines within the specified range.
-          - This parameter takes precedence over the default single replacement behavior, but is ignored if `line_numbers` is provided.
-          - If used with `line_all=True`, `line_all` will be ignored.
+            - The first element is the start line, and the second is the end line.
+            - Line numbers are 1-indexed.
+            - If provided, the replacement will only occur on lines within the specified range.
+            - This parameter takes precedence over the default single replacement behavior, but is ignored if `line_numbers` is provided.
+            - If used with `line_all=True`, `line_all` will be ignored.
+            - If `old_str` is multiline, this parameter will not work as expected. Use `line_numbers` instead.
 
         - `line_all`: (optional, boolean, defaults to False) If True, all occurrences of `old_str` will be replaced.
-          - If False, only the first occurrence will be replaced, unless `line_numbers` or `line_range` are provided.
-          - If `line_numbers` or `line_range` are provided, this parameter is ignored.
-
-        - `delete_lines`: (optional, list of integers) A list of line numbers to delete.
-          - Line numbers are 1-indexed.
-          - If provided, the specified lines will be deleted, and other replacement parameters will be ignored.
-          - This parameter takes the highest precedence.
-
-        - `delete_range`: (optional, list of two integers) A range of line numbers (inclusive) to delete.
-          - The first element is the start line, and the second is the end line.
-          - Line numbers are 1-indexed.
-          - If provided, the specified lines will be deleted, and other replacement parameters will be ignored, except for `delete_lines`.
-          - This parameter takes precedence over all other parameters except `delete_lines`.
+            - If False, only the first occurrence will be replaced, unless `line_numbers` or `line_range` are provided.
+            - If `line_numbers` or `line_range` are provided, this parameter is ignored.
 
         - `regex`: (optional, boolean, defaults to False) If True, `old_str` will be treated as a regular expression.
-          - If False, `old_str` will be treated as a literal string.
-          - When `regex=True` and `line_all=True`, all matching occurrences will be replaced.
-          - When `regex=True` and `line_all=False`, only the first matching occurrence will be replaced.
-          - When `regex=True` and `line_numbers` or `line_range` are provided, the regex replacement will be applied only on the specified lines.
+            - If False, `old_str` will be treated as a literal string.
+            - When `regex=True` and `line_all=True`, all matching occurrences will be replaced.
+            - When `regex=True` and `line_all=False`, only the first matching occurrence will be replaced.
+            - When `regex=True` and `line_numbers` or `line_range` are provided, the regex replacement will be applied only on the specified lines.
 
         **Parameter precedence:**
-        - `delete_lines` has the highest precedence. If provided, other parameters are ignored.
-        - `delete_range` has the second highest precedence. If provided, other parameters except `delete_lines` are ignored.
         - `line_numbers` has the third highest precedence. If provided, `line_range` and `line_all` are ignored.
         - `line_range` has the fourth highest precedence. If provided, `line_all` is ignored.
         - `line_all` is considered only if `line_numbers` and `line_range` are not provided.
-        - If none of `line_numbers`, `line_range`, `line_all`, `delete_lines`, or `delete_range` are provided, the replacement is performed on the first occurrence of `old_str`.
+        - If none of `line_numbers`, `line_range`, `line_all` are provided, the replacement is performed on the first occurrence of `old_str`.
 
         **Potential issues:**
         - If `old_str` is not found in the file, a `ToolError` will be raised.
         - If `old_str` appears multiple times and no line-specific parameters are used, a `ToolError` will be raised to prevent unintended replacements.
         - When using `regex=True`, ensure that `old_str` is a valid regular expression.
         - When using `line_numbers` or `line_range`, ensure that the line numbers are within the valid range of the file.
-        - When using `delete_lines` or `delete_range`, ensure that the line numbers are within the valid range of the file.
 
-        '''
+        Returns:
+            CLIResult: The result of the command execution.
+
+        Raises:
+            ToolError: If `old_str` is not found or appears multiple times unexpectedly.
+        """
         file_content = self.read_file(path).expandtabs()
         old_str = old_str.expandtabs()
         new_str = new_str.expandtabs() if new_str is not None else ''
-
-        if new_str is None:
-            new_str = ''
-
+        
         file_content_lines = file_content.split('\n')
         num_lines = len(file_content_lines)
-        
+
         def validate_min_or_max(pattern: str, min_line: int, max_line: int, num_lines: int):
             if min_line <= 0:
                 raise ToolError(f'Invalid {pattern}: {min_line}. Line numbers must be between 1 and {num_lines}.')
@@ -195,76 +224,49 @@ class OHEditor:
         # Validate line numbers
         if line_numbers:
             validate_min_or_max('line number', min(line_numbers), max(line_numbers), num_lines)
-        if line_range:
-            validate_min_or_max('line range', min(line_range), max(line_range), num_lines)
-            start , end = line_range
+        if start is not None and end is not None:
+            validate_min_or_max('line range', min(start, end), max(start, end), num_lines)
             if start > end:
-                raise ToolError(f'Invalid line range: {line_range}. Start line must be less than or equal to end line.')
-        if delete_lines:
-            validate_min_or_max('delete lines', min(delete_lines), max(delete_lines), num_lines)
-        if delete_range:
-            validate_min_or_max('delete range', min(delete_range), max(delete_range), num_lines)
-            start , end = delete_range
-            if start > end:
-                raise ToolError(f'Invalid delete range: {delete_range}. Start line must be less than or equal to end line.')
-
-        # Delete specified line
-        if delete_lines:
-            delete_lines = [i - 1 for i in delete_lines]
-            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not i in delete_lines]
-            new_file_content = '\n'.join(new_file_content_lines)
-            self.write_file(path, new_file_content)
-            self._file_history[path].append(file_content)
-            return CLIResult(
-                output=f'The file {path} has been edited. Specified lines have been deleted.',
-                prev_exist=True,
-                path=str(path),
-                old_content=file_content,
-                new_content=new_file_content,
-            )
-
-        # Delete lines within a specified range
-        if delete_range:
-            start, end = delete_range
-            new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not (start <= i + 1 <= end)]
-            new_file_content = '\n'.join(new_file_content_lines)
-            self.write_file(path, new_file_content)
-            self._file_history[path].append(file_content)
-            return CLIResult(
-                output=f'The file {path} has been edited. The specified line range was deleted.',
-                prev_exist=True,
-                path=str(path),
-                old_content=file_content,
-                new_content=new_file_content,
-            )
+                raise ToolError(f'Invalid line range: [{start}, {end}]. Start line must be less than or equal to end line.')
 
         # If line_all is False, perform replacement on specific lines or a single occurrence
         if not line_all:
             # Replace on specific lines
             if line_numbers:
                 replace_lines = [i - 1 for i in line_numbers]
-                for i in replace_lines:
-                    if i < len(file_content_lines):
-                        if regex:
+                if regex:
+                    for i in replace_lines:
+                        if i < len(file_content_lines):
                             file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
-                        else:
-                            file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
+                else:
+                   for i in replace_lines:
+                       if i < len(file_content_lines):
+                           if old_str not in file_content_lines[i]:
+                                raise ToolError(f'No replacement was performed, old_str `{old_str}` did not appear on line {i+1} in {path}.')
+                           file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
                 new_file_content = '\n'.join(file_content_lines)
             # Replace within a specific line range
-            elif line_range:
-                start, end = line_range
-                for i in range(start - 1, end):
-                    if i < len(file_content_lines):
-                        if regex:
-                            file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
-                        else:
-                            file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
+            elif start is not None and end is not None:
+                if regex:
+                   for i in range(start - 1, end):
+                       if i < len(file_content_lines):
+                           file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
+                else:
+                    for i in range(start - 1, end):
+                        if i < len(file_content_lines):
+                             if old_str not in file_content_lines[i]:
+                                raise ToolError(f'No replacement was performed, old_str `{old_str}` did not appear on line {i+1} in {path}.')
+                             file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
                 new_file_content = '\n'.join(file_content_lines)
             # Replace a single occurrence
             else:
                 if regex:
                     # One-time substitution using regex
-                    new_file_content = re.sub(old_str, new_str, file_content, 1)
+                    new_file_content = re.sub(old_str, new_str, file_content, 1, flags=re.DOTALL)
+                    if new_file_content == file_content and new_str != '':
+                            raise ToolError(
+                                f'No replacement was performed, old_str `{old_str}` did not appear in {path}.'
+                            )
                 else:
                     # Ensure old_str exists and is unique for non-regex single replacement
                     occurrences = file_content.count(old_str)
@@ -273,7 +275,7 @@ class OHEditor:
                             f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
                         )
                     if occurrences > 1:
-                        # Find starting line numbers for each occurrence
+                         # Find starting line numbers for each occurrence
                         line_numbers = []
                         start_idx = 0
                         while True:
@@ -292,7 +294,7 @@ class OHEditor:
         else:
             if regex:
                 # Replace all occurrences using regex
-                new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
+                 new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
             else:
                 # Replace all occurrences using string replace
                 file_content_lines = file_content.splitlines()
@@ -332,9 +334,19 @@ class OHEditor:
         )
 
     def view(self, path: Path, view_range: list[int] | None = None) -> CLIResult:
-        '''
-        View the contents of a file or a directory.
-        '''
+        """
+        View the contents of a file or directory.
+
+        Args:
+            path (Path): The path to the file or directory being viewed.
+            view_range (list[int], optional): The range of lines to display when viewing a file ([start_line, end_line]). Defaults to None.
+
+        Returns:
+            CLIResult: The result of the command execution.
+
+        Raises:
+            EditorToolParameterInvalidError: If `view_range` is invalid.
+        """
         if path.is_dir():
             if view_range:
                 raise EditorToolParameterInvalidError(
@@ -424,9 +436,16 @@ class OHEditor:
         )
 
     def write_file(self, path: Path, file_text: str) -> None:
-        '''
-        Write the content of a file to a given path; raise a ToolError if an error occurs.
-        '''
+        """
+        Writes text to a file.
+
+        Args:
+            path (Path): The path to the file being written to.
+            file_text (str): The text to write.
+
+        Raises:
+            ToolError: If an error occurs while writing to the file.
+        """
         try:
             path.write_text(file_text)
         except Exception as e:
@@ -435,9 +454,22 @@ class OHEditor:
     def insert(
         self, path: Path, insert_line: int, new_str: str, enable_linting: bool
     ) -> CLIResult:
-        '''
-        Implement the insert command, which inserts new_str at the specified line in the file content.
-        '''
+        """
+        Inserts text into a file at the specified line.
+
+        Args:
+            path (Path): The path to the file being operated on.
+            insert_line (int): The line number to insert text at.
+            new_str (str): The text to insert.
+            enable_linting (bool): Whether to enable the linter.
+
+        Returns:
+            CLIResult: The result of the command execution.
+
+        Raises:
+             ToolError: If an error occurs while reading the file.
+            EditorToolParameterInvalidError: If `insert_line` is invalid.
+        """
         try:
             file_text = self.read_file(path)
         except Exception as e:
@@ -497,9 +529,16 @@ class OHEditor:
         )
 
     def validate_path(self, command: Command, path: Path) -> None:
-        '''
-        Check that the path/command combination is valid.
-        '''
+        """
+        Validates the path/command combination.
+
+        Args:
+            command (Command): The command being executed.
+            path (Path): The path to the file.
+
+        Raises:
+            EditorToolParameterInvalidError: If the path is not absolute or if the path and command are incompatible.
+        """
         # Check if its an absolute path
         if not path.is_absolute():
             suggested_path = Path.cwd() / path
@@ -529,9 +568,18 @@ class OHEditor:
             )
 
     def undo_edit(self, path: Path) -> CLIResult:
-        '''
-        Implement the undo_edit command.
-        '''
+        """
+        Undo the last edit operation on a file.
+
+        Args:
+            path (Path): The path to the file.
+
+        Returns:
+            CLIResult: The result of the command execution.
+
+        Raises:
+            ToolError: If no edit history is found for the file.
+        """
         if not self._file_history[path]:
             raise ToolError(f'No edit history found for {path}.')
 
@@ -548,9 +596,18 @@ class OHEditor:
         )
 
     def read_file(self, path: Path) -> str:
-        '''
-        Read the content of a file from a given path; raise a ToolError if an error occurs.
-        '''
+        """
+        Reads the content of a file from a given path.
+
+        Args:
+            path (Path): The path to the file.
+
+        Returns:
+            str: The content of the file.
+
+        Raises:
+            ToolError: If an error occurs while reading the file.
+        """
         try:
             return path.read_text()
         except Exception as e:
@@ -563,9 +620,18 @@ class OHEditor:
         start_line: int = 1,
         expand_tabs: bool = True,
     ) -> str:
-        '''
-        Generate output for the CLI based on the content of a code snippet.
-        '''
+        """
+        Generates output for the CLI based on the content of a code snippet.
+
+        Args:
+            snippet_content (str): The content of the code snippet.
+            snippet_description (str): A description of the snippet.
+            start_line (int, optional): The starting line number of the snippet. Defaults to 1.
+            expand_tabs (bool, optional): Whether to expand tabs in the snippet. Defaults to True.
+
+        Returns:
+            str: The formatted output.
+        """
         snippet_content = maybe_truncate(
             snippet_content, truncate_notice=FILE_CONTENT_TRUNCATED_NOTICE
         )
@@ -585,9 +651,17 @@ class OHEditor:
         )
 
     def _run_linting(self, old_content: str, new_content: str, path: Path) -> str:
-        '''
-        Run linting on file changes and return formatted results.
-        '''
+        """
+        Runs linting on file changes and returns formatted results.
+
+        Args:
+            old_content (str): The old content of the file.
+            new_content (str): The new content of the file.
+            path (Path): The path to the file.
+
+        Returns:
+            str: The formatted linting results.
+        """
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
             # Create paths with exact filenames in temp directory
@@ -611,3 +685,137 @@ class OHEditor:
                     f'- Line {result.line}, Column {result.column}: {result.message}'
                 )
             return '\n'.join(output) + '\n'
+
+    def delete(
+        self,
+        path: Path,
+        delete_lines: list[int] | None = None,
+        start: int | None = None,
+        end: int | None = None,
+     ) -> CLIResult:
+        """
+        Deletes the specified lines or range of lines from a file.
+
+        The behavior of this command is controlled by the following optional parameters:
+
+        - `delete_lines`: (optional, list of integers) A list of line numbers to delete.
+            - Line numbers are 1-indexed.
+            - If provided, the specified lines will be deleted.
+            - If a line number is out of range, it will raise a ToolError.
+            - This parameter takes precedence over `start` and `end`.
+
+        - `start`: (optional, integer) The start line number of the range to delete.
+            - Line numbers are 1-indexed.
+            - If provided, the deletion will start from the specified line.
+            - It should always be used with the `end` parameter.
+            - If a line number is out of range, it will raise a ToolError.
+            - This parameter will be ignored if `lines` is provided.
+
+        - `end`: (optional, integer) The end line number of the range to delete.
+            - Line numbers are 1-indexed.
+            - If provided, the deletion will continue up to the specified line (inclusive).
+            - It should always be used with the `start` parameter.
+            - If a line number is out of range, it will raise a ToolError.
+            - This parameter will be ignored if `lines` is provided.
+
+        **Parameter precedence:**
+            - `lines` has the highest precedence. If provided, other parameters are ignored.
+            - If none of `lines` are provided, the command will attempt to delete using `start` and `end` parameters.
+
+        **Potential issues:**
+        - If line numbers are out of range, a `ToolError` will be raised.
+
+        Args:
+            path (Path): The path to the file.
+
+        Returns:
+            CLIResult: The result of the command execution.
+
+        Raises:
+            ToolError: If both `lines` and `start/end` are specified, or if neither is specified.
+        """
+        if delete_lines is not None and (start is not None or end is not None):
+            raise ToolError(
+                "Cannot specify both 'delete_lines' and 'start/end' for deletion."
+            )
+        if delete_lines:
+            return self._delete_lines(path, delete_lines)
+        elif start is not None and end is not None:
+            return self._delete_lines_range(path, start, end)
+        else:
+            raise ToolError(
+                "Must specify either 'delete_lines' or 'start/end' for deletion."
+            )
+
+    def _delete_lines(self, path: Path, delete_lines: list[int]) -> CLIResult:
+         """
+         Deletes the specified lines from a file.
+
+         Args:
+             path (Path): The path to the file.
+             delete_lines (list[int]): The list of line numbers to delete.
+
+         Returns:
+             CLIResult: The result of the command execution.
+         """
+         file_content = self.read_file(path)
+         file_content_lines = file_content.splitlines()
+         num_lines = len(file_content_lines)
+         
+         def validate_min_or_max(pattern: str, min_line: int, max_line: int, num_lines: int):
+            if min_line <= 0:
+                raise ToolError(f'Invalid {pattern}: {min_line}. Line numbers must be between 1 and {num_lines}.')
+            if num_lines < max_line:
+                raise ToolError(f'Invalid {pattern}: {max_line}. Line numbers must be between 1 and {num_lines}.')
+         validate_min_or_max('delete lines', min(delete_lines), max(delete_lines), num_lines)
+         
+         delete_lines = [i - 1 for i in delete_lines]
+         new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not i in delete_lines]
+         new_file_content = '\n'.join(new_file_content_lines)
+
+         self.write_file(path, new_file_content)
+         self._file_history[path].append(file_content)
+         return CLIResult(
+             output=f'The file {path} has been edited. Specified lines have been deleted.',
+             prev_exist=True,
+             path=str(path),
+             old_content=file_content,
+             new_content=new_file_content,
+         )
+
+    def _delete_lines_range(self, path: Path, start: int, end: int) -> CLIResult:
+        """
+        Deletes the specified range of lines from a file.
+
+        Args:
+             path (Path): The path to the file.
+             start (int): The start line of the range to delete.
+             end (int): The end line of the range to delete.
+
+        Returns:
+             CLIResult: The result of the command execution.
+         """
+        file_content = self.read_file(path)
+        file_content_lines = file_content.splitlines()
+        num_lines = len(file_content_lines)
+        def validate_min_or_max(pattern: str, min_line: int, max_line: int, num_lines: int):
+            if min_line <= 0:
+                raise ToolError(f'Invalid {pattern}: {min_line}. Line numbers must be between 1 and {num_lines}.')
+            if num_lines < max_line:
+                raise ToolError(f'Invalid {pattern}: {max_line}. Line numbers must be between 1 and {num_lines}.')
+        validate_min_or_max('delete range', min(start, end), max(start, end), num_lines)
+        
+        if start > end:
+              raise ToolError(f'Invalid delete range: [{start}, {end}]. Start line must be less than or equal to end line.')
+        
+        new_file_content_lines = [line for i, line in enumerate(file_content_lines) if not (start <= i + 1 <= end)]
+        new_file_content = '\n'.join(new_file_content_lines)
+        self.write_file(path, new_file_content)
+        self._file_history[path].append(file_content)
+        return CLIResult(
+            output=f'The file {path} has been edited. The specified line range was deleted.',
+            prev_exist=True,
+            path=str(path),
+            old_content=file_content,
+            new_content=new_file_content,
+        )

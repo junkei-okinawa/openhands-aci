@@ -79,7 +79,7 @@ def test_create_with_none_file_text(editor):
     new_file = test_file.parent / 'none_content.txt'
     with pytest.raises(EditorToolParameterMissingError) as exc_info:
         editor(command='create', path=str(new_file), file_text=None)
-    assert 'file_text' in str(exc_info.value.message)
+    assert 'file_text' in str(exc_info.value)
 
 
 def test_str_replace_no_linting(editor):
@@ -175,8 +175,8 @@ def test_str_replace_error_multiple_occurrences(editor):
         editor(
             command='str_replace', path=str(test_file), old_str='test', new_str='sample'
         )
-    assert 'Multiple occurrences of old_str `test`' in str(exc_info.value.message)
-    assert '[1, 2]' in str(exc_info.value.message)  # Should show both line numbers
+    assert 'Multiple occurrences of old_str `test`' in str(exc_info.value)
+    assert '[1, 2]' in str(exc_info.value)  # Should show both line numbers
 
 
 def test_str_replace_error_multiple_multiline_occurrences(editor):
@@ -195,7 +195,7 @@ def test_str_replace_error_multiple_multiline_occurrences(editor):
             old_str=multi_block,
             new_str='def new():\n    print("World")',
         )
-    error_msg = str(exc_info.value.message)
+    error_msg = str(exc_info.value)
     assert 'Multiple occurrences of old_str' in error_msg
     assert '[1, 7]' in error_msg  # Should show correct starting line numbers
 
@@ -211,7 +211,7 @@ def test_str_replace_nonexistent_string(editor):
         )
     assert 'No replacement was performed' in str(exc_info)
     assert f'old_str `Non-existent Line` did not appear verbatim in {test_file}' in str(
-        exc_info.value.message
+        exc_info.value
     )
 
 
@@ -237,7 +237,7 @@ def test_str_replace_with_none_old_str(editor):
             old_str=None,
             new_str='new content',
         )
-    assert 'old_str' in str(exc_info.value.message)
+    assert 'old_str' in str(exc_info.value)
 
 
 def test_insert_no_linting(editor):
@@ -290,8 +290,8 @@ def test_insert_invalid_line(editor):
             insert_line=10,
             new_str='Invalid Insert',
         )
-    assert 'Invalid `insert_line` parameter' in str(exc_info.value.message)
-    assert 'It should be within the range of lines of the file' in str(
+    assert 'Invalid `10` parameter for command `insert_line`:' in str(exc_info.value.message)
+    assert 'It should be within the range of lines of the file:' in str(
         exc_info.value.message
     )
 
@@ -319,7 +319,7 @@ def test_insert_with_none_new_str(editor):
             insert_line=1,
             new_str=None,
         )
-    assert 'new_str' in str(exc_info.value.message)
+    assert 'new_str' in str(exc_info.value)
 
 
 def test_undo_edit(editor):
@@ -353,8 +353,9 @@ def test_create_existing_file_error(editor):
 
 def test_str_replace_missing_old_str(editor):
     editor, test_file = editor
-    with pytest.raises(EditorToolParameterMissingError):
+    with pytest.raises(EditorToolParameterMissingError) as exc_info:
         editor(command='str_replace', path=str(test_file), new_str='sample')
+    assert 'old_str' in str(exc_info.value)
 
 
 def test_str_replace_new_str_and_old_str_same(editor):
@@ -368,7 +369,7 @@ def test_str_replace_new_str_and_old_str_same(editor):
         )
     assert (
         'No replacement was performed. `new_str` and `old_str` must be different.'
-        in str(exc_info.value.message)
+        in str(exc_info.value)
     )
 
 def test_str_replace_invalid_line_numbers(editor):
@@ -382,7 +383,7 @@ def test_str_replace_invalid_line_numbers(editor):
             new_str='New Line',
             line_numbers=[0, 2],
         )
-    assert "Invalid line number: 0" in str(exc_info.value.message)
+    assert "Invalid line number: 0" in str(exc_info.value)
 
     with pytest.raises(ToolError) as exc_info:
         editor(
@@ -392,7 +393,7 @@ def test_str_replace_invalid_line_numbers(editor):
             new_str='New Line',
             line_numbers=[2, 4],
         )
-    assert "Invalid line number: 4" in str(exc_info.value.message)
+    assert "Invalid line number: 4" in str(exc_info.value)
 
 
 def test_str_replace_invalid_line_range(editor):
@@ -404,9 +405,10 @@ def test_str_replace_invalid_line_range(editor):
             path=str(test_file),
             old_str='Line 2',
             new_str='New Line',
-            line_range=[0, 2],
+            start=0,
+            end=2
         )
-    assert "Invalid line range: 0" in str(exc_info.value.message)
+    assert "Invalid line range: 0" in str(exc_info.value)
 
     with pytest.raises(ToolError) as exc_info:
         editor(
@@ -414,9 +416,10 @@ def test_str_replace_invalid_line_range(editor):
             path=str(test_file),
             old_str='Line 2',
             new_str='New Line',
-            line_range=[2, 4],
+            start=2,
+            end=4
         )
-    assert "Invalid line range: 4" in str(exc_info.value.message)
+    assert "Invalid line range: 4" in str(exc_info.value)
 
     with pytest.raises(ToolError) as exc_info:
         editor(
@@ -424,9 +427,10 @@ def test_str_replace_invalid_line_range(editor):
             path=str(test_file),
             old_str='Line 2',
             new_str='New Line',
-            line_range=[3, 1],
+            start=3,
+            end=1
         )
-    assert "Invalid line range: [3, 1]. Start line must be less than or equal to end line." in str(exc_info.value.message)
+    assert "Invalid line range: [3, 1]. Start line must be less than or equal to end line." in str(exc_info.value)
 
 
 def test_str_replace_invalid_delete_lines(editor):
@@ -434,57 +438,50 @@ def test_str_replace_invalid_delete_lines(editor):
     test_file.write_text("Line 1\nLine 2\nLine 3")
     with pytest.raises(ToolError) as exc_info:
         editor(
-            command='str_replace',
+            command='delete',
             path=str(test_file),
-            old_str='Line 2',
-            new_str='New Line',
             delete_lines=[0, 2],
         )
-    assert "Invalid delete lines: 0" in str(exc_info.value.message)
+    assert "Invalid delete lines: 0" in str(exc_info.value)
 
     with pytest.raises(ToolError) as exc_info:
-        editor(
-            command='str_replace',
+         editor(
+            command='delete',
             path=str(test_file),
-            old_str='Line 2',
-            new_str='New Line',
             delete_lines=[2, 4],
         )
-    assert "Invalid delete lines: 4" in str(exc_info.value.message)
+    assert "Invalid delete lines: 4" in str(exc_info.value)
 
 
 def test_str_replace_invalid_delete_range(editor):
     editor, test_file = editor
     test_file.write_text("Line 1\nLine 2\nLine 3")
     with pytest.raises(ToolError) as exc_info:
-        editor(
-            command='str_replace',
+       editor(
+            command='delete',
             path=str(test_file),
-            old_str='Line 2',
-            new_str='New Line',
-            delete_range=[0, 2],
+            start=0,
+            end=2,
         )
-    assert "Invalid delete range: 0" in str(exc_info.value.message)
+    assert "Invalid delete range: 0" in str(exc_info.value)
 
     with pytest.raises(ToolError) as exc_info:
         editor(
-            command='str_replace',
+            command='delete',
             path=str(test_file),
-            old_str='Line 2',
-            new_str='New Line',
-            delete_range=[2, 4],
+            start=2,
+            end=4
         )
-    assert "Invalid delete range: 4" in str(exc_info.value.message)
+    assert "Invalid delete range: 4" in str(exc_info.value)
 
     with pytest.raises(ToolError) as exc_info:
-        editor(
-            command='str_replace',
+       editor(
+            command='delete',
             path=str(test_file),
-            old_str='Line 2',
-            new_str='New Line',
-            delete_range=[3, 1],
+            start=3,
+            end=1,
         )
-    assert "Invalid delete range: [3, 1]. Start line must be less than or equal to end line." in str(exc_info.value.message)
+    assert "Invalid delete range: [3, 1]. Start line must be less than or equal to end line." in str(exc_info.value)
 
 def test_insert_missing_line_param(editor):
     editor, test_file = editor
@@ -625,7 +622,8 @@ def test_str_replace_with_line_range(editor):
         path=str(test_file),
         old_str="This is a",
         new_str="Replaced",
-        line_range=[2,3],
+       start=2,
+       end=3,
     )
     assert isinstance(result, CLIResult)
     assert "Replaced test line." in test_file.read_text()
@@ -645,10 +643,8 @@ def test_str_replace_with_delete_lines(editor):
     editor, test_file = editor
     test_file.write_text("This is a test file.\nThis is a test line.\nThis is another test line.\nThis is a test file.")
     result = editor(
-        command="str_replace",
+        command="delete",
         path=str(test_file),
-        old_str="This is a test file.",
-        new_str=None,
         delete_lines=[1,4],
     )
     assert isinstance(result, CLIResult)
@@ -666,11 +662,10 @@ def test_str_replace_with_delete_range(editor):
     test_file.write_text("This is a test file.\nThis is a test line.\nThis is another test line.\nThis is a test file.")
     path = str(test_file)
     result = editor(
-        command="str_replace",
+       command="delete",
         path=str(test_file),
-        old_str="This is a test line.",
-        new_str=None,
-        delete_range=[2,3],
+       start=2,
+       end=3,
     )
     assert isinstance(result, CLIResult)
     assert "This is a test file." in test_file.read_text()
@@ -795,7 +790,7 @@ def test_validate_path_suggests_absolute_path(editor):
     relative_path = test_file.name  # This is a relative path
     with pytest.raises(EditorToolParameterInvalidError) as exc_info:
         editor(command='view', path=relative_path)
-    error_message = str(exc_info.value.message)
+    error_message = str(exc_info.value)
     assert 'The path should be an absolute path' in error_message
     assert 'Maybe you meant' in error_message
     suggested_path = error_message.split('Maybe you meant ')[1].strip('?')
