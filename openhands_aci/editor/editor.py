@@ -259,7 +259,7 @@ class OHEditor:
                             file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
                         else:
                             file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
-                new_file_content = '\n'.join(file_content_lines)
+                new_file_content = "\\n".join(file_content_lines)
             # Replace a single occurrence
             else:
                 if regex:
@@ -295,7 +295,9 @@ class OHEditor:
                 new_file_content = re.sub(old_str, new_str, file_content, flags=re.DOTALL)
             else:
                 # Replace all occurrences using string replace
-                new_file_content = file_content.replace(old_str, new_str)
+                file_content_lines = file_content.splitlines()
+                new_file_content_lines = [line.replace(old_str, new_str) for line in file_content_lines]
+                new_file_content = "\\n".join(new_file_content_lines)
 
         # Write the new content to the file
         self.write_file(path, new_file_content)
