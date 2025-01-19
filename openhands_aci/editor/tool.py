@@ -1,6 +1,21 @@
-from typing import Literal
+from typing import Dict, List, Union, Literal, Any, TypedDict
 
-_STR_REPLACE_EDITOR_DESCRIPTION = """Custom editing tool for viewing, creating and editing files
+class ItemType(TypedDict):
+    type: Literal["integer"]
+
+class PropertyType(TypedDict, total=False):
+        description: str
+        type: Literal["string", "integer", "array", "boolean", "object"]
+        enum: List[str]
+        items: ItemType
+
+class ParametersType(TypedDict):
+    type: Literal["object"]
+    properties: Dict[str, PropertyType]
+    required: List[str]
+
+
+STR_REPLACE_EDITOR_DESCRIPTION: Literal = """Custom editing tool for viewing, creating and editing files
 * State is persistent across command calls and discussions with the user
 * If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
 * The `create` command cannot be used if the specified `path` already exists as a file
@@ -16,7 +31,7 @@ Notes for using the `delete` command:
 *  The `start` and `end` parameters should contain the range of the lines to delete.
 """
 
-parameters = {
+PARAMETERS: ParametersType = {
     'type': 'object',
     'properties': {
         'command': {
