@@ -71,6 +71,7 @@ class OHEditor:
         delete_lines: list[int] | None = None,
         start: int | None = None,
         end: int | None = None,
+        create_parents: bool = False,
         **kwargs,
     ) -> CLIResult:
         """
@@ -104,7 +105,7 @@ class OHEditor:
         elif command == 'create':
             if file_text is None:
                 raise EditorToolParameterMissingError(command, 'file_text')
-            self.write_file(_path, file_text)
+            self.write_file(_path, file_text, create_parents=create_parents)
             self._file_history[_path].append(file_text)
             return CLIResult(
                 path=str(_path),
@@ -229,91 +230,111 @@ class OHEditor:
             if start > end:
                 raise ToolError(f'Invalid line range: [{start}, {end}]. Start line must be less than or equal to end line.')
 
-        # If line_all is False, perform replacement on specific lines or a single occurrence
-        if not line_all:
-            # Replace on specific lines
-            if line_numbers:
-                replace_lines = [i - 1 for i in line_numbers]
-                if regex:
-                    for i in replace_lines:
-                        if i < len(file_content_lines):
-                            file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
-                else:
-                   for i in replace_lines:
-                       if i < len(file_content_lines):
-                           if old_str not in file_content_lines[i]:
-                                raise ToolError(f'No replacement was performed, old_str `{old_str}` did not appear on line {i+1} in {path}.')
-                           file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
-                new_file_content = '\n'.join(file_content_lines)
-            # Replace within a specific line range
-            elif start is not None and end is not None:
-                if regex:
-                   for i in range(start - 1, end):
-                       if i < len(file_content_lines):
-                           file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
-                else:
-                    for i in range(start - 1, end):
-                        if i < len(file_content_lines):
-                             if old_str not in file_content_lines[i]:
-                                raise ToolError(f'No replacement was performed, old_str `{old_str}` did not appear on line {i+1} in {path}.')
-                             file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
-                new_file_content = '\n'.join(file_content_lines)
-            # Replace a single occurrence
-            else:
-                if regex:
-                    file_content_lines = file_content.splitlines()
-                    new_file_content_lines = []
-                    replaced = False
-                    for line in file_content_lines:
-                        if not replaced:
-                            new_line = re.sub(old_str, new_str, line, 1, flags=re.DOTALL)
-                            if new_line != line:
-                                new_file_content_lines.append(new_line)
-                                replaced = True
-                            else:
-                                new_file_content_lines.append(line)
-                        else:
-                            new_file_content_lines.append(line)
-                    new_file_content = '\n'.join(new_file_content_lines)
-                    if not replaced and new_str != '':
-                        raise ToolError(
-                            f'No replacement was performed, old_str `{old_str}` did not appear in {path}.'
-                        )
-                else:
-                    # Ensure old_str exists and is unique for non-regex single replacement
-                    occurrences = file_content.count(old_str)
-                    if occurrences == 0:
-                        raise ToolError(
-                            f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
-                        )
-                    if occurrences > 1:
-                         # Find starting line numbers for each occurrence
-                        line_numbers = []
-                        start_idx = 0
-                        while True:
-                            idx = file_content.find(old_str, start_idx)
-                            if idx == -1:
-                                break
-                            # Count newlines before this occurrence to get the line number
-                            line_num = file_content.count('\n', 0, idx) + 1
-                            line_numbers.append(line_num)
-                            start_idx = idx + 1
-                        raise ToolError(
-                            f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
-                        )
-                    new_file_content = file_content.replace(old_str, new_str)
-        # If line_all is True, replace all occurrences
-        else:
+        try:
+            # If using regex, try to compile it first to catch any regex errors
             if regex:
-                # Replace all occurrences using regex
-                file_content_lines = file_content.splitlines()
-                new_file_content_lines = [re.sub(old_str, new_str, line, flags=re.DOTALL) for line in file_content_lines]
-                new_file_content = '\n'.join(new_file_content_lines)
+                re.compile(old_str)
+                
+            # If line_all is False, perform replacement on specific lines or a single occurrence
+            if not line_all:
+                # Replace on specific lines
+                if line_numbers:
+                    replace_lines = [i - 1 for i in line_numbers]
+                    if regex:
+                        try:
+                            for i in replace_lines:
+                                if i < len(file_content_lines):
+                                    file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
+                        except re.error as e:
+                            raise ToolError(f'Invalid regular expression: {str(e)}')
+                    else:
+                        for i in replace_lines:
+                            if i < len(file_content_lines):
+                                if old_str not in file_content_lines[i]:
+                                    raise ToolError(f'No replacement was performed, old_str `{old_str}` did not appear on line {i+1} in {path}.')
+                                file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
+                    new_file_content = '\n'.join(file_content_lines)
+                # Replace within a specific line range
+                elif start is not None and end is not None:
+                    if regex:
+                        try:
+                            for i in range(start - 1, end):
+                                if i < len(file_content_lines):
+                                    file_content_lines[i] = re.sub(old_str, new_str, file_content_lines[i], flags=re.DOTALL)
+                        except re.error as e:
+                            raise ToolError(f'Invalid regular expression: {str(e)}')
+                    else:
+                        for i in range(start - 1, end):
+                            if i < len(file_content_lines):
+                                if old_str not in file_content_lines[i]:
+                                    raise ToolError(f'No replacement was performed, old_str `{old_str}` did not appear on line {i+1} in {path}.')
+                                file_content_lines[i] = file_content_lines[i].replace(old_str, new_str)
+                    new_file_content = '\n'.join(file_content_lines)
+                # Replace a single occurrence
+                else:
+                    if regex:
+                        try:
+                            file_content_lines = file_content.splitlines()
+                            new_file_content_lines = []
+                            replaced = False
+                            for line in file_content_lines:
+                                if not replaced:
+                                    new_line = re.sub(old_str, new_str, line, 1, flags=re.DOTALL)
+                                    if new_line != line:
+                                        new_file_content_lines.append(new_line)
+                                        replaced = True
+                                    else:
+                                        new_file_content_lines.append(line)
+                                else:
+                                    new_file_content_lines.append(line)
+                            new_file_content = '\n'.join(new_file_content_lines)
+                            if not replaced and new_str != '':
+                                raise ToolError(
+                                    f'No replacement was performed, old_str `{old_str}` did not appear in {path}.'
+                                )
+                        except re.error as e:
+                            raise ToolError(f'Invalid regular expression: {str(e)}')
+                    else:
+                        # Ensure old_str exists and is unique for non-regex single replacement
+                        occurrences = file_content.count(old_str)
+                        if occurrences == 0:
+                            raise ToolError(
+                                f'No replacement was performed, old_str `{old_str}` did not appear verbatim in {path}.'
+                            )
+                        if occurrences > 1:
+                            # Find starting line numbers for each occurrence
+                            line_numbers = []
+                            start_idx = 0
+                            while True:
+                                idx = file_content.find(old_str, start_idx)
+                                if idx == -1:
+                                    break
+                                # Count newlines before this occurrence to get the line number
+                                line_num = file_content.count('\n', 0, idx) + 1
+                                line_numbers.append(line_num)
+                                start_idx = idx + 1
+                            raise ToolError(
+                                f'No replacement was performed. Multiple occurrences of old_str `{old_str}` in lines {line_numbers}. Please ensure it is unique.'
+                            )
+                        new_file_content = file_content.replace(old_str, new_str)
+            # If line_all is True, replace all occurrences
             else:
-                # Replace all occurrences using string replace
-                file_content_lines = file_content.splitlines()
-                new_file_content_lines = [line.replace(old_str, new_str) for line in file_content_lines]
-                new_file_content = '\n'.join(new_file_content_lines)
+                if regex:
+                    try:
+                        # Replace all occurrences using regex
+                        file_content_lines = file_content.splitlines()
+                        new_file_content_lines = [re.sub(old_str, new_str, line, flags=re.DOTALL) for line in file_content_lines]
+                        new_file_content = '\n'.join(new_file_content_lines)
+                    except re.error as e:
+                        raise ToolError(f'Invalid regular expression: {str(e)}')
+                else:
+                    # Replace all occurrences using string replace
+                    file_content_lines = file_content.splitlines()
+                    new_file_content_lines = [line.replace(old_str, new_str) for line in file_content_lines]
+                    new_file_content = '\n'.join(new_file_content_lines)
+
+        except re.error as e:
+            raise ToolError(f'Invalid regular expression: {str(e)}')
 
         # Write the new content to the file
         self.write_file(path, new_file_content)
@@ -449,18 +470,21 @@ class OHEditor:
             prev_exist=True,
         )
 
-    def write_file(self, path: Path, file_text: str) -> None:
+    def write_file(self, path: Path, file_text: str, create_parents: bool = False) -> None:
         """
         Writes text to a file.
 
         Args:
             path (Path): The path to the file being written to.
             file_text (str): The text to write.
+            create_parents (bool, optional): Whether to create parent directories if they don't exist.
 
         Raises:
             ToolError: If an error occurs while writing to the file.
         """
         try:
+            if create_parents:
+                path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(file_text)
         except Exception as e:
             raise ToolError(f'Ran into {e} while trying to write to {path}') from None

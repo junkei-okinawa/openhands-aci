@@ -82,3 +82,49 @@ def test_simple_correct_py_func_def(simple_correct_py_func_def):
     # Test python_compile_lint
     compile_result = python_compile_lint(simple_correct_py_func_def)
     assert compile_result == []
+
+
+def test_python_linter_with_invalid_flake8_output(simple_correct_py_file, monkeypatch):
+    def mock_run_shell_cmd(*args, **kwargs):
+        return 0, "invalid:format:output:without:line:number"
+    
+    monkeypatch.setattr('openhands_aci.linter.impl.python.run_shell_cmd', mock_run_shell_cmd)
+    
+    result = flake_lint(simple_correct_py_file)
+    assert result == []
+
+
+def test_python_linter_with_missing_column(simple_correct_py_file, monkeypatch):
+    def mock_run_shell_cmd(*args, **kwargs):
+        return 0, f"{simple_correct_py_file}:1:invalid_column:error message"
+    
+    monkeypatch.setattr('openhands_aci.linter.impl.python.run_shell_cmd', mock_run_shell_cmd)
+    
+    result = flake_lint(simple_correct_py_file)
+    assert len(result) == 1
+    assert result[0].column == 1
+    assert "invalid_column error message" in result[0].message
+
+def test_python_linter_with_flake8_not_found(simple_correct_py_file, monkeypatch):
+    def mock_run_shell_cmd(*args, **kwargs):
+        raise FileNotFoundError("flake8 not found")
+    
+    monkeypatch.setattr('openhands_aci.linter.impl.python.run_shell_cmd', mock_run_shell_cmd)
+    
+    result = flake_lint(simple_correct_py_file)
+    assert result == []
+
+def test_compile_lint_with_code(tmp_path):
+    linter = PythonLinter()
+    test_file = tmp_path / "test.py"
+    valid_code = "print('hello')"
+    result = linter.compile_lint(str(test_file), valid_code)
+    assert result == []
+
+def test_compile_lint_with_invalid_code(tmp_path):
+    linter = PythonLinter()
+    test_file = tmp_path / "test.py"
+    invalid_code = "print('hello'"  # Missing parenthesis
+    result = linter.compile_lint(str(test_file), invalid_code)
+    assert len(result) == 1
+    assert 'SyntaxError:' in result[0].message

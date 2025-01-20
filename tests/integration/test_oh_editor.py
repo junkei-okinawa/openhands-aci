@@ -168,6 +168,83 @@ Review the changes and make sure they are as expected. Edit the file again if ne
     # Test that the file content has been updated
     assert 'This is a sample file.' in test_file.read_text()
 
+def test_str_replace_with_line_numbers(editor):
+    # Test replacing a string on a specific line using line_numbers
+    editor, test_file = editor
+    with open(test_file, 'w') as f:
+        f.write("line 1\\nline 2 to replace\\nline 3\\nline 2 to replace")
+
+    result = editor(
+        command='str_replace',
+        path=str(test_file),
+        old_str='line 2',
+        new_str='replaced line 2',
+        line_numbers=[2],
+        enable_linting=False,
+    )
+    assert isinstance(result, CLIResult)
+    with open(test_file, 'r') as f:
+        content = f.read()
+    assert content == "line 1\\nreplaced line 2 to replace\\nline 3\\nline 2 to replace"
+
+def test_str_replace_with_line_range(editor):
+    # Test replacing a string within a line range using start and end
+    editor, test_file = editor
+    with open(test_file, 'w') as f:
+        f.write("line 1\\nline 2 to replace\\nline 3 to replace\\nline 4\\nline 5 to replace")
+
+    result = editor(
+        command='str_replace',
+        path=str(test_file),
+        old_str='line ',
+        new_str='replaced line ',
+        start=2,
+        end=4,
+        enable_linting=False,
+    )
+    assert isinstance(result, CLIResult)
+    with open(test_file, 'r') as f:
+        content = f.read()
+    assert content == "line 1\\nreplaced line 2 to replace\\nreplaced line 3 to replace\\nline 4\\nline 5 to replace"
+
+def test_str_replace_with_line_all(editor):
+    # Test replacing all occurrences of a string using line_all
+    editor, test_file = editor
+    with open(test_file, 'w') as f:
+        f.write("line 1\\nline 2 to replace\\nline 3\\nline 2 to replace")
+
+    result = editor(
+        command='str_replace',
+        path=str(test_file),
+        old_str='line 2',
+        new_str='replaced line 2',
+        line_all=True,
+        enable_linting=False,
+    )
+    assert isinstance(result, CLIResult)
+    with open(test_file, 'r') as f:
+        content = f.read()
+    assert content == "line 1\\nreplaced line 2 to replace\\nline 3\\nreplaced line 2 to replace"
+
+def test_str_replace_with_regex(editor):
+    # Test replacing a string using regex
+    editor, test_file = editor
+    with open(test_file, 'w') as f:
+        f.write("line 1\\nline 2 to replace\\nline 3\\nline 22 to replace")
+
+    result = editor(
+        command='str_replace',
+        path=str(test_file),
+        old_str='line \\d+',
+        new_str='replaced line',
+        regex=True,
+        line_all=True,
+        enable_linting=False,
+    )
+    assert isinstance(result, CLIResult)
+    with open(test_file, 'r') as f:
+        content = f.read()
+    assert content == "replaced line\\nreplaced line to replace\\nreplaced line\\nreplaced line to replace"
 
 def test_str_replace_error_multiple_occurrences(editor):
     editor, test_file = editor
@@ -181,12 +258,11 @@ def test_str_replace_error_multiple_occurrences(editor):
 
 def test_str_replace_error_multiple_multiline_occurrences(editor):
     editor, test_file = editor
-    # Create a file with two identical multi-line blocks
+# Create a file with two identical multi-line blocks
     multi_block = """def example():
     print("Hello")
     return True"""
-    content = f"{multi_block}\n\nprint('separator')\n\n{multi_block}"
-    test_file.write_text(content)
+    test_file.write_text(f"{multi_block}\n\nprint('separator')\n\n{multi_block}")
 
     with pytest.raises(ToolError) as exc_info:
         editor(
@@ -795,3 +871,138 @@ def test_validate_path_suggests_absolute_path(editor):
     assert 'Maybe you meant' in error_message
     suggested_path = error_message.split('Maybe you meant ')[1].strip('?')
     assert Path(suggested_path).is_absolute()
+
+
+def test_create_with_existing_file(editor):
+    editor, test_file = editor
+    with pytest.raises(EditorToolParameterInvalidError) as exc_info:
+        editor(command='create', path=str(test_file), file_text='New content')
+    assert 'Cannot overwrite files using command `create`' in str(exc_info.value)
+
+
+def test_delete_with_invalid_parameters(editor):
+    editor, test_file = editor
+    with pytest.raises(ToolError) as exc_info:
+        editor(command='delete', path=str(test_file))
+    assert "Must specify either 'delete_lines' or 'start/end' for deletion" in str(exc_info.value)
+
+
+def test_undo_edit_with_no_history(editor):
+    editor, test_file = editor
+    with pytest.raises(ToolError) as exc_info:
+        editor(command='undo_edit', path=str(test_file))
+    assert 'No edit history found' in str(exc_info.value)
+
+
+def test_view_with_invalid_range(editor):
+    editor, test_file = editor
+    with pytest.raises(EditorToolParameterInvalidError) as exc_info:
+        editor(command='view', path=str(test_file), view_range=[-1, 10])
+    assert 'should be within the range of lines of the file' in str(exc_info.value)
+
+
+def test_str_replace_with_invalid_regex(editor):
+    editor, test_file = editor
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='str_replace',
+            path=str(test_file),
+            old_str='[a-z',  # 不完全な正規表現
+            new_str='replacement',
+            regex=True,
+        )
+    assert 'unterminated character set' in str(exc_info.value)
+
+
+def test_invalid_command(editor):
+    editor, test_file = editor
+    with pytest.raises(ToolError) as exc_info:
+        editor(command='invalid_command', path=str(test_file))
+    assert 'Unrecognized command invalid_command' in str(exc_info.value)
+
+
+def test_view_empty_file(editor, tmp_path):
+    editor, _ = editor
+    empty_file = tmp_path / 'empty.txt'
+    empty_file.write_text('')
+    result = editor(command='view', path=str(empty_file))
+    assert isinstance(result, CLIResult)
+    # 空ファイルの場合でも cat -n の結果が表示される
+    assert "result of running `cat -n`" in result.output
+    assert empty_file.read_text() == ''
+
+
+def test_view_non_utf8_file(editor, tmp_path):
+    editor, _ = editor
+    binary_file = tmp_path / 'binary.bin'
+    binary_file.write_bytes(b'\x80\x81\x82')
+    with pytest.raises(ToolError) as exc_info:
+        editor(command='view', path=str(binary_file))
+    assert "utf-8' codec can't decode" in str(exc_info.value)
+
+
+def test_create_with_special_chars(editor, tmp_path):
+    editor, _ = editor
+    file_with_spaces = tmp_path / 'file with spaces.txt'
+    result = editor(
+        command='create',
+        path=str(file_with_spaces),
+        file_text='content with\nspecial\tchars'
+    )
+    assert isinstance(result, ToolResult)
+    assert file_with_spaces.exists()
+    assert file_with_spaces.read_text() == 'content with\nspecial\tchars'
+
+
+def test_view_with_non_existent_range(editor):
+    editor, test_file = editor
+    with pytest.raises(EditorToolParameterInvalidError) as exc_info:
+        editor(command='view', path=str(test_file), view_range=[100, 200])
+    assert 'should be within the range of lines of the file' in str(exc_info.value)
+
+
+def test_path_with_non_standard_chars(editor, tmp_path):
+    editor, _ = editor
+    path_with_unicode = tmp_path / 'テスト.txt'
+    path_with_unicode.write_text('test content')
+    result = editor(command='view', path=str(path_with_unicode))
+    assert isinstance(result, CLIResult)
+    assert 'test content' in result.output
+
+
+def test_create_directory_structure(editor, tmp_path):
+    editor, _ = editor
+    nested_path = tmp_path / 'dir1' / 'dir2' / 'test.txt'
+    
+    result = editor(
+        command='create',
+        path=str(nested_path),
+        file_text='nested content',
+        create_parents=True
+    )
+    assert isinstance(result, ToolResult)
+    assert nested_path.exists()
+    assert nested_path.read_text() == 'nested content'
+    assert nested_path.parent.is_dir()  # Verify parent directories were created
+
+# Add a test case for create without parent directories
+def test_create_without_parent_directories(editor, tmp_path):
+    editor, _ = editor
+    nested_path = tmp_path / 'missing_dir' / 'test.txt'
+    
+    with pytest.raises(ToolError) as exc_info:
+        editor(
+            command='create',
+            path=str(nested_path),
+            file_text='content',
+            create_parents=False
+        )
+    assert 'No such file or directory' in str(exc_info.value)
+
+
+def test_delete_with_missing_file(editor, tmp_path):
+    editor, _ = editor
+    non_existent = tmp_path / 'non_existent.txt'
+    with pytest.raises(EditorToolParameterInvalidError) as exc_info:
+        editor(command='delete', path=str(non_existent), delete_lines=[1])
+    assert 'does not exist' in str(exc_info.value)
