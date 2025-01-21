@@ -93,7 +93,6 @@ class PythonLinter(BaseLinter):
                     file=file_path,
                     line=e.lineno,
                     column=e.offset,
-                    message=str(e),
-                    rule='SyntaxError',
+                    message=f'SyntaxError: {str(e)}'
                 )
             ]

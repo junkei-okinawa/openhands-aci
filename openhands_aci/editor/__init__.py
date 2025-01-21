@@ -26,6 +26,10 @@ def file_editor(
     new_str: str | None = None,
     insert_line: int | None = None,
     enable_linting: bool = False,
+    delete_lines: list[int] | None = None,
+    start: int | None = None,
+    end: int | None = None,
+    **kwargs,
 ) -> str:
     result: ToolResult | None = None
     try:
@@ -38,6 +42,10 @@ def file_editor(
             new_str=new_str,
             insert_line=insert_line,
             enable_linting=enable_linting,
+            delete_lines=delete_lines,
+            start=start,
+            end=end,
+            **kwargs,
         )
     except ToolError as e:
         result = ToolResult(error=e.message)
