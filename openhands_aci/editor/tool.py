@@ -17,7 +17,7 @@ class ParametersType(TypedDict):
 
 STR_REPLACE_EDITOR_DESCRIPTION: Literal = """Custom editing tool for viewing, creating and editing files
 * State is persistent across command calls and discussions with the user
-* If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
+* If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep. If `path` is a file, `view` displays the result of applying `cat -n`. Note that line numbers are displayed. Line numbers are not included in the text.
 * The `create` command cannot be used if the specified `path` already exists as a file
 * If a `command` generates a long output, it will be truncated and marked with `<response clipped>`
 * The `undo_edit` command will revert the last edit made to the file at `path`
